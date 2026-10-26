@@ -33,6 +33,7 @@ class Config:
     min_fcf_positive: int = 3         # 近 4 年 FCF 为正的年数
     max_net_debt_ebit: float = 4.0    # 净债务/EBIT 上限
     min_roic: Optional[float] = None         # ROIC 下限 (税后 EBIT / 投入资本)
+    min_recent_vol: Optional[float] = 0.12   # 近 30 日年化波动率下限; 低于此多半是待收购、价格被锁在要约价附近
     require_above_200d: bool = True
     max_fwd_pe: Optional[float] = None       # 前瞻 PE 上限
     min_eps_growth: Optional[float] = None   # 当年与次年预期 EPS 增速下限 (盈利要在增长)
@@ -105,6 +106,7 @@ def stock_factors(s: StockData, cfg: Config) -> dict:
     p1, p12 = _price_at(s.prices, 21), _price_at(s.prices, 365)
     f["mom_12_1"] = p1 / p12 - 1 if p12 == p12 and p12 > 0 else np.nan
     f["above_200d"] = bool(s.price > s.prices.tail(200).mean())
+    f["vol_30d"] = float(s.prices.pct_change().tail(30).std() * np.sqrt(252))
     p6 = _price_at(s.prices, 183)
     f["mom_6_1"] = p1 / p6 - 1 if p6 == p6 and p6 > 0 else np.nan
 
@@ -129,6 +131,8 @@ def apply_gates(t: pd.DataFrame, cfg: Config) -> pd.DataFrame:
         for tk in t.index[mask]:
             reasons[tk] = reasons[tk] + [msg]
 
+    if cfg.min_recent_vol is not None:
+        fail(t["vol_30d"] < cfg.min_recent_vol, "价格被锁定(疑似待收购,动量/修正信号失效)")
     fail(t["sector"].isin(NOT_APPLICABLE_SECTORS), "金融/地产股,FCF-DCF不适用")
     fail(~(t["fwd_pe"] > 0), "无正的前瞻EPS或无分析师覆盖")
     if cfg.min_mos is not None:

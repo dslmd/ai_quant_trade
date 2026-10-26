@@ -130,3 +130,10 @@ def test_negative_ebit_not_waved_through(tmp_path):
     s, _ = _fetch(tmp_path)
     s.fin.loc[s.fin.index[-1], "ebit"] = -1e9
     assert "EBIT<=0" in screen({"TEST": s}).loc["TEST", "fail_reasons"]
+
+
+def test_pinned_price_flagged_as_pending_deal(tmp_path):
+    s, _ = _fetch(tmp_path)
+    s.prices = s.prices.copy()
+    s.prices.iloc[-40:] = 38.2 + np.sin(np.arange(40)) * 0.02     # 收购要约价附近窄幅波动
+    assert "待收购" in screen({"TEST": s}).loc["TEST", "fail_reasons"]
