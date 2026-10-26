@@ -2,7 +2,7 @@
 
 StockData 是单只股票的全部输入。数据源可替换:
   - load_json / save_json: 手工或其他渠道准备的数据 (离线、可复现)
-  - fetch_yfinance: 从 Yahoo 拉取 (需要联网, 字段名随 yfinance 版本可能变化)
+  - fetch.py 的 fetch_basket: 自动从 Yahoo 拉取 (需要联网)
   - demo_basket: 随机生成的假数据, 只用来跑通流程, 不代表任何真实公司
 """
 import json
@@ -68,70 +68,6 @@ def load_prices_csv(path: str, col: str = "close") -> pd.Series:
     """读 date,close 形式的 CSV (用于基准指数)。"""
     df = pd.read_csv(path, parse_dates=[0], index_col=0)
     return df[col].sort_index()
-
-
-def fetch_yfinance(ticker: str) -> StockData:
-    """从 yfinance 取数。
-
-    注意: 本函数写于无法联网的环境, 没有用真实数据测过。
-    yfinance 的行名/列名会随版本变, 第一次使用请对照 print(tk.cashflow.index) 检查。
-    """
-    import yfinance as yf
-
-    tk = yf.Ticker(ticker)
-    info = tk.info or {}
-
-    def row(df, *names):
-        for n in names:
-            if n in df.index:
-                return df.loc[n]
-        return pd.Series(dtype=float)
-
-    cf, inc, bs = tk.cashflow, tk.financials, tk.balance_sheet
-    fin = pd.DataFrame({
-        "revenue": row(inc, "Total Revenue"),
-        "net_income": row(inc, "Net Income"),
-        "ebit": row(inc, "EBIT", "Operating Income"),
-        "cfo": row(cf, "Operating Cash Flow", "Total Cash From Operating Activities"),
-        "capex": row(cf, "Capital Expenditure", "Capital Expenditures"),
-        "total_debt": row(bs, "Total Debt"),
-        "cash": row(bs, "Cash And Cash Equivalents", "Cash"),
-        "equity": row(bs, "Stockholders Equity", "Total Stockholder Equity"),
-    })
-    fin.index = pd.to_datetime(fin.index).year
-    fin.index.name = "year"
-    fin = fin.sort_index().fillna(0.0)
-
-    hist = tk.history(period="2y")["Close"]
-    hist.index = hist.index.tz_localize(None) if hist.index.tz is not None else hist.index
-
-    # eps_trend: 行 0q/+1q/0y/+1y, 列 current/7daysAgo/30daysAgo/60daysAgo/90daysAgo
-    # 用 0y 与 +1y 按剩余月份加权近似"未来 12 个月", 这里简化为 +1y 与 0y 的平均
-    def fwd(col):
-        et = tk.eps_trend
-        return float(0.5 * (et.loc["0y", col] + et.loc["+1y", col]))
-
-    et_ok = True
-    try:
-        eps = {c: fwd(c) for c in ["current", "30daysAgo", "60daysAgo", "90daysAgo"]}
-    except Exception:
-        et_ok, eps = False, {}
-    try:
-        er = tk.eps_revisions
-        up, down = int(er.loc["0y", "upLast30days"]), int(er.loc["0y", "downLast30days"])
-    except Exception:
-        up = down = 0
-    nan = float("nan")
-    return StockData(
-        ticker=ticker, price=float(info.get("currentPrice") or hist.iloc[-1]),
-        shares=float(info.get("sharesOutstanding") or nan), beta=float(info.get("beta") or 1.0),
-        fin=fin, prices=hist,
-        eps_fwd=eps.get("current", nan) if et_ok else nan,
-        eps_fwd_30d=eps.get("30daysAgo", nan) if et_ok else nan,
-        eps_fwd_60d=eps.get("60daysAgo", nan) if et_ok else nan,
-        eps_fwd_90d=eps.get("90daysAgo", nan) if et_ok else nan,
-        rev_up_30d=up, rev_down_30d=down, sector=str(info.get("sector", "")),
-    )
 
 
 def demo_basket(n: int = 12, seed: int = 0) -> Dict[str, StockData]:

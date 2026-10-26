@@ -3,7 +3,8 @@
 用法:
   python egs_trade/value_multifactor/run_screen.py --demo                       # 假数据跑通流程
   python egs_trade/value_multifactor/run_screen.py --json basket.json --bench spy.csv --save
-  python egs_trade/value_multifactor/run_screen.py --tickers AAPL MSFT --bench-ticker SPY   # 需联网 yfinance
+  python egs_trade/value_multifactor/run_screen.py --tickers AAPL MSFT NVDA --save            # 联网自动取数, 基准 SPY
+  python egs_trade/value_multifactor/run_screen.py --tickers-file basket.txt --refresh --save  # 忽略缓存重新取
   python egs_trade/value_multifactor/run_screen.py --evaluate --json basket_now.json --bench spy_now.csv
 """
 import argparse
@@ -13,7 +14,8 @@ import sys
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-from quant_brain.value_factor.data import demo_basket, fetch_yfinance, load_json, load_prices_csv
+from quant_brain.value_factor.data import demo_basket, load_json, load_prices_csv
+from quant_brain.value_factor.fetch import fetch_basket, fetch_benchmark
 from quant_brain.value_factor.factors import Config, screen
 from quant_brain.value_factor.tracker import evaluate_snapshot, load_snapshots, save_snapshot
 
@@ -26,8 +28,10 @@ def main():
     ap.add_argument("--demo", action="store_true")
     ap.add_argument("--json")
     ap.add_argument("--tickers", nargs="*")
+    ap.add_argument("--tickers-file", help="每行一个代码, # 开头为注释")
+    ap.add_argument("--refresh", action="store_true", help="忽略缓存")
     ap.add_argument("--bench", help="基准指数 CSV (date,close)")
-    ap.add_argument("--bench-ticker")
+    ap.add_argument("--bench-ticker", default="SPY")
     ap.add_argument("--top", type=int, default=5)
     ap.add_argument("--save", action="store_true", help="保存快照, 供之后验证胜率")
     ap.add_argument("--evaluate", action="store_true", help="用当前价格验证历史快照")
@@ -37,17 +41,26 @@ def main():
         basket = demo_basket(20, 1)
     elif a.json:
         basket = load_json(a.json)
-    elif a.tickers:
-        basket = {t: fetch_yfinance(t) for t in a.tickers}
+    elif a.tickers or a.tickers_file:
+        tickers = list(a.tickers or [])
+        if a.tickers_file:
+            with open(a.tickers_file, encoding="utf-8") as f:
+                tickers += [ln.split("#")[0].strip() for ln in f if ln.split("#")[0].strip()]
+        basket, reports = fetch_basket(sorted(set(tickers)), max_age_hours=0 if a.refresh else 12)
+        for r in reports:
+            tag = "缓存" if r.from_cache else ("OK" if r.ok else "失败")
+            print(f"[{tag}] {r.ticker}" + (": " + "; ".join(r.warnings) if r.warnings else ""))
+        if not basket:
+            sys.exit("一只都没取到。若是网络问题: 沙箱需放行 query1/query2.finance.yahoo.com, fc.yahoo.com")
+        print()
     else:
-        ap.error("需要 --demo / --json / --tickers 之一")
+        ap.error("需要 --demo / --json / --tickers / --tickers-file 之一")
 
     bench = None
     if a.bench:
         bench = load_prices_csv(a.bench).iloc[-1]
-    elif a.bench_ticker:
-        import yfinance as yf
-        bench = float(yf.Ticker(a.bench_ticker).history(period="5d")["Close"].iloc[-1])
+    elif not a.demo:
+        bench = float(fetch_benchmark(a.bench_ticker).iloc[-1])
 
     if a.evaluate:
         now = {k: v.price for k, v in basket.items()}

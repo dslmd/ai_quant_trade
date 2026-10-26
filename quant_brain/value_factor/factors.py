@@ -14,6 +14,9 @@ from quant_brain.value_factor.dcf import DCFInputs, dcf_value, fade_growth, marg
 from quant_brain.value_factor.fcf import cagr, free_cash_flow_firm
 
 
+NOT_APPLICABLE_SECTORS = {"Financial Services", "Real Estate"}
+
+
 @dataclass
 class Config:
     risk_free: float = 0.04
@@ -46,7 +49,7 @@ def _price_at(prices: pd.Series, days_back: int) -> float:
 def stock_factors(s: StockData, cfg: Config) -> dict:
     fin = s.fin.sort_index()
     fcf = free_cash_flow_firm(fin["cfo"], fin["capex"])
-    f: dict = {"ticker": s.ticker, "price": s.price}
+    f: dict = {"ticker": s.ticker, "price": s.price, "sector": s.sector}
 
     # --- 价值: 前瞻 PE 及 90 天趋势 ---
     f["fwd_pe"] = s.price / s.eps_fwd if s.eps_fwd > 0 else np.nan
@@ -102,7 +105,8 @@ def apply_gates(t: pd.DataFrame, cfg: Config) -> pd.DataFrame:
         for tk in t.index[mask]:
             reasons[tk] = reasons[tk] + [msg]
 
-    fail(~(t["fwd_pe"] > 0), "无正的前瞻EPS")
+    fail(t["sector"].isin(NOT_APPLICABLE_SECTORS), "金融/地产股,FCF-DCF不适用")
+    fail(~(t["fwd_pe"] > 0), "无正的前瞻EPS或无分析师覆盖")
     fail(~(t["dcf_mos"] >= cfg.min_mos), "DCF无安全边际/无正FCF")
     fail(~(t["fwd_pe_trend"] <= cfg.max_pe_trend), "前瞻PE在抬升(陷阱)")
     fail(~(t["rev_90d"] >= cfg.min_revision), "盈利预期被下调")

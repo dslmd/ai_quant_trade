@@ -19,13 +19,39 @@
 DCF 刻意保守: 历史 FCF 增速打 7 折、封顶 15%、10 年线性衰减到 2.5%,折现率限制在 8% 到 12%。
 `dcf.py` 里有敏感性表和反向 DCF(看股价隐含多高增长)。
 
-## 用法
+## 用法(美股,基准 SPY)
 
 ```bash
-python egs_trade/value_multifactor/run_screen.py --demo                      # 假数据跑通流程
-python egs_trade/value_multifactor/run_screen.py --tickers AAPL MSFT --bench-ticker SPY --save   # 联网
-python egs_trade/value_multifactor/run_screen.py --json basket.json --bench spy.csv --save       # 离线
+pip install -r egs_trade/value_multifactor/requirements.txt
+python egs_trade/value_multifactor/run_screen.py --tickers AAPL MSFT NVDA --save       # 自动联网取数
+python egs_trade/value_multifactor/run_screen.py --tickers-file basket.txt --refresh   # 从文件读,忽略缓存
+python egs_trade/value_multifactor/run_screen.py --demo                                # 假数据跑通流程
+python egs_trade/value_multifactor/run_screen.py --json basket.json --bench spy.csv    # 离线
 ```
+
+## 自动取数
+
+`quant_brain/value_factor/fetch.py` 通过 yfinance 取 Yahoo Finance 的数据:
+年报三表(自由现金流、债务、ROIC)、分析师 `eps_trend` 和 `eps_revisions`(前瞻 EPS 与修正)、2 年日线、SPY。
+
+- 前瞻 EPS 按财年剩余比例,在当年(0y)和次年(+1y)预期之间加权,近似未来 12 个月。
+  30/60/90 天前用同一权重,所以"修正"只反映预期变化,不含财年滚动。
+- 每只股票单独容错:网络和限流错误退避重试 3 次;数据不够(缺经营现金流、财报不足 3 年、价格不足 250 天)直接跳过并说明原因。
+- 缓存 12 小时,在 `runtime/value_screener/cache/`,`--refresh` 强制重取。
+- 金融股和地产股自动排除,FCF 和 DCF 对它们没有意义。
+- 没有分析师覆盖的小盘股会在门槛里被挡掉,并提示"无分析师覆盖"。
+
+### 在云端沙箱里使用要先放行域名
+
+沙箱默认拒绝 Yahoo。在环境设置的 Network access 里加入:
+`query1.finance.yahoo.com`、`query2.finance.yahoo.com`、`fc.yahoo.com`、`finance.yahoo.com`。
+在自己电脑上跑不需要这一步。
+
+### 验证状态
+
+- 已验证:解析逻辑、前瞻 EPS 加权、重试、缓存、容错,用按 yfinance 1.7 源码构造的假对象做的单元测试(`unit_test/test_fetch.py`)。
+- 没验证:对真实 Yahoo 的调用。开发环境连不上,所以第一次联网跑请先用 2 到 3 只股票试,看警告输出。
+  Yahoo 改字段名时,修改 `fetch.py` 顶部的 `ROW_ALIASES` 即可。
 
 `--save` 把本次入选名单和价格存到 `runtime/value_screener/snapshots/`。
 几个月后用 `--evaluate` 对照真实价格,得到等权超额收益和单股跑赢大盘的比例,以及被筛掉那批股票的同一指标做对照。
@@ -39,8 +65,9 @@ python egs_trade/value_multifactor/run_screen.py --json basket.json --bench spy.
 
 ## 当前限制
 
-- 这个环境连不上 Yahoo 等数据站(代理拒绝),`fetch_yfinance` 没有用真实数据测过,字段名可能要调整。已验证的部分是:因子计算、DCF、门槛、打分、快照读写,都是用假数据和单元测试验证的。
-- A 股需要换数据源(tushare、baostock 等),把数据整理成 `StockData` 即可,其他代码不用改。
+- Yahoo 的免费数据没有历史时点的分析师预期,也偶有缺失或口径变化。重要决策前对照公司财报和一个独立来源。
+- 财报只有 4 年左右,DCF 的增长假设本来就粗。
+- 换其他市场只需把数据整理成 `StockData`,其他代码不用改。
 - 假数据只用来演示流程,输出的"入选股"没有任何意义。
 
 ## 相关
