@@ -48,3 +48,5 @@ mlruns
 **/*build*
 ly_*
 log
+# 选股器取数缓存(可重新生成)
+runtime/value_screener/cache/
