@@ -16,10 +16,12 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from quant_brain.value_factor.data import demo_basket, load_json, load_prices_csv
 from quant_brain.value_factor.fetch import fetch_basket, fetch_benchmark
-from quant_brain.value_factor.factors import Config, screen
+from quant_brain.value_factor.factors import Config, screen, smallcap_momentum_config
+from quant_brain.value_factor.universe import smallcap_momentum_universe
 from quant_brain.value_factor.tracker import evaluate_snapshot, load_snapshots, save_snapshot
 
 pd.set_option("display.width", 220)
+COLS_SMALL = ["price", "fwd_pe", "peg", "eps_g0", "eps_g1", "eps_accel", "rev_90d", "surprise", "rev_yoy_q", "mom_6_1", "mom_12_1", "score", "pick"]
 COLS = ["price", "fwd_pe", "fwd_pe_trend", "dcf_mos", "rev_90d", "rev_breadth", "roic", "mom_12_1", "score", "pick"]
 
 
@@ -29,6 +31,10 @@ def main():
     ap.add_argument("--json")
     ap.add_argument("--tickers", nargs="*")
     ap.add_argument("--tickers-file", help="每行一个代码, # 开头为注释")
+    ap.add_argument("--profile", choices=["value", "smallcap"], default="value",
+                    help="value: 价值+DCF+修正; smallcap: 小盘动量+盈利加速+前瞻PE不离谱")
+    ap.add_argument("--universe", choices=["smallcap"], help="先用 Yahoo 选股器预筛候选池 (需联网)")
+    ap.add_argument("--max-names", type=int, default=60, help="预筛后最多取数多少只")
     ap.add_argument("--refresh", action="store_true", help="忽略缓存")
     ap.add_argument("--bench", help="基准指数 CSV (date,close)")
     ap.add_argument("--bench-ticker", default="SPY")
@@ -41,8 +47,12 @@ def main():
         basket = demo_basket(20, 1)
     elif a.json:
         basket = load_json(a.json)
-    elif a.tickers or a.tickers_file:
+    elif a.tickers or a.tickers_file or a.universe:
         tickers = list(a.tickers or [])
+        if a.universe:
+            u = smallcap_momentum_universe()
+            print(f"预筛得到 {len(u)} 只候选")
+            tickers += u["symbol"].head(a.max_names).tolist()
         if a.tickers_file:
             with open(a.tickers_file, encoding="utf-8") as f:
                 tickers += [ln.split("#")[0].strip() for ln in f if ln.split("#")[0].strip()]
@@ -68,8 +78,9 @@ def main():
             print(evaluate_snapshot(snap, now, bench))
         return
 
-    t = screen(basket, Config(), top_n=a.top)
-    print(t[COLS].round(3).to_string())
+    cfg = smallcap_momentum_config() if a.profile == "smallcap" else Config()
+    t = screen(basket, cfg, top_n=a.top)
+    print(t[COLS_SMALL if a.profile == "smallcap" else COLS].round(3).to_string())
     print("\n未通过原因:")
     for tk, r in t[~t["pass_gates"]].iterrows():
         print(f"  {tk}: {r['fail_reasons']}")

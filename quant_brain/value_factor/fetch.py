@@ -118,11 +118,30 @@ def _build_stock(ticker: str, tk, rep: FetchReport) -> StockData:
     except Exception:
         rep.warnings.append("无预期修正广度数据")
 
+    g0 = g1 = surprise = rev_yoy = nan
+    try:
+        ee = tk.earnings_estimate
+        g0, g1 = float(ee.loc["0y", "growth"]), float(ee.loc["+1y", "growth"])
+    except Exception:
+        rep.warnings.append("无盈利增速预期")
+    try:
+        eh = tk.earnings_history
+        surprise = float(eh["surprisePercent"].dropna().tail(4).mean())
+    except Exception:
+        pass
+    try:
+        qi = _row(tk.quarterly_income_stmt, ROW_ALIASES["revenue"]).dropna().sort_index()
+        if len(qi) >= 5:
+            rev_yoy = float(qi.iloc[-1] / qi.iloc[-5] - 1)
+    except Exception:
+        pass
+
     return StockData(
         ticker=ticker, price=float(price), shares=float(shares), beta=float(info.get("beta") or 1.0),
         fin=fin, prices=hist, eps_fwd=eps["current"], eps_fwd_30d=eps["30daysAgo"],
         eps_fwd_60d=eps["60daysAgo"], eps_fwd_90d=eps["90daysAgo"],
         rev_up_30d=up, rev_down_30d=down, sector=str(info.get("sector", "")),
+        eps_growth_0y=g0, eps_growth_1y=g1, surprise_avg4=surprise, rev_yoy_q=rev_yoy,
     )
 
 

@@ -30,6 +30,10 @@ class StockData:
     rev_up_30d: int = 0               # 近 30 天上调盈利预期的分析师数
     rev_down_30d: int = 0
     sector: str = ""
+    eps_growth_0y: float = float("nan")   # 分析师一致预期的 EPS 同比增速: 当前财年 / 下一财年
+    eps_growth_1y: float = float("nan")
+    surprise_avg4: float = float("nan")   # 近 4 季 EPS 超预期幅度均值 (小数)
+    rev_yoy_q: float = float("nan")       # 最新季营收同比
 
     @property
     def net_debt(self) -> float:
@@ -39,7 +43,8 @@ class StockData:
 
 def _to_json(s: StockData) -> dict:
     d = {k: getattr(s, k) for k in ["ticker", "price", "shares", "beta", "eps_fwd", "eps_fwd_30d",
-                                    "eps_fwd_60d", "eps_fwd_90d", "rev_up_30d", "rev_down_30d", "sector"]}
+                                    "eps_fwd_60d", "eps_fwd_90d", "rev_up_30d", "rev_down_30d", "sector",
+                                    "eps_growth_0y", "eps_growth_1y", "surprise_avg4", "rev_yoy_q"]}
     d["fin"] = s.fin.reset_index().rename(columns={s.fin.index.name or "index": "year"}).to_dict("list")
     d["prices"] = {str(k.date()): float(v) for k, v in s.prices.items()}
     return d

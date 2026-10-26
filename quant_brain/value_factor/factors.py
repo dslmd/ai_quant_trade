@@ -4,7 +4,7 @@
 篮子很小时 (几十只) z-score 不稳, 所以用分位数排名。
 """
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -27,17 +27,33 @@ class Config:
     rate_floor: float = 0.08          # 折现率夹在 [8%, 12%], 避免 beta 噪音
     rate_cap: float = 0.12
     # 硬性门槛
-    min_mos: float = 0.0              # DCF 安全边际下限
+    min_mos: Optional[float] = 0.0    # DCF 安全边际下限; None 表示不设这道门槛
     max_pe_trend: float = 0.10        # 前瞻 PE 90 天涨幅上限 (越高越像价值陷阱)
     min_revision: float = 0.0         # 90 天 EPS 预期修正下限
     min_fcf_positive: int = 3         # 近 4 年 FCF 为正的年数
     max_net_debt_ebit: float = 4.0    # 净债务/EBIT 上限
+    min_roic: Optional[float] = None         # ROIC 下限 (税后 EBIT / 投入资本)
+    require_above_200d: bool = True
+    max_fwd_pe: Optional[float] = None       # 前瞻 PE 上限
+    min_eps_growth: Optional[float] = None   # 当年与次年预期 EPS 增速下限 (盈利要在增长)
+    min_mom: Optional[float] = None          # 12-1 动量下限
+    max_mom: Optional[float] = None          # 12-1 动量上限 (排除已经抛物线的)
     # 分组权重 (持有 3-6 个月: 修正和动量权重高于纯估值)
     weights: Dict[str, float] = None
 
     def __post_init__(self):
         if self.weights is None:
-            self.weights = {"value": 0.25, "dcf": 0.25, "revision": 0.30, "quality": 0.10, "momentum": 0.10}
+            self.weights = {"value": 0.25, "dcf": 0.25, "revision": 0.30, "quality": 0.10, "momentum": 0.10,
+                            "growth": 0.0}
+
+
+def smallcap_momentum_config() -> "Config":
+    """小盘动量 + 盈利加速 + 前瞻PE不离谱。DCF 不设门槛 (小盘成长股的 FCF 常被再投资压低)。"""
+    return Config(
+        min_mos=None, min_fcf_positive=2, max_net_debt_ebit=3.0, max_pe_trend=0.15,
+        max_fwd_pe=35.0, min_eps_growth=0.10, min_mom=0.15, max_mom=2.5, min_roic=0.08,
+        weights={"momentum": 0.30, "growth": 0.25, "revision": 0.25, "value": 0.10, "quality": 0.10, "dcf": 0.0},
+    )
 
 
 def _price_at(prices: pd.Series, days_back: int) -> float:
@@ -89,6 +105,14 @@ def stock_factors(s: StockData, cfg: Config) -> dict:
     p1, p12 = _price_at(s.prices, 21), _price_at(s.prices, 365)
     f["mom_12_1"] = p1 / p12 - 1 if p12 == p12 and p12 > 0 else np.nan
     f["above_200d"] = bool(s.price > s.prices.tail(200).mean())
+    p6 = _price_at(s.prices, 183)
+    f["mom_6_1"] = p1 / p6 - 1 if p6 == p6 and p6 > 0 else np.nan
+
+    # --- 盈利加速: 预期增速 (当年/次年), 次年相对当年的加速, 超预期, 营收同比; PEG ---
+    f["eps_g0"], f["eps_g1"] = s.eps_growth_0y, s.eps_growth_1y
+    f["eps_accel"] = s.eps_growth_1y - s.eps_growth_0y
+    f["surprise"], f["rev_yoy_q"] = s.surprise_avg4, s.rev_yoy_q
+    f["peg"] = f["fwd_pe"] / (100 * s.eps_growth_1y) if s.eps_growth_1y > 0 and f["fwd_pe"] == f["fwd_pe"] else np.nan
     return f
 
 
@@ -107,12 +131,25 @@ def apply_gates(t: pd.DataFrame, cfg: Config) -> pd.DataFrame:
 
     fail(t["sector"].isin(NOT_APPLICABLE_SECTORS), "金融/地产股,FCF-DCF不适用")
     fail(~(t["fwd_pe"] > 0), "无正的前瞻EPS或无分析师覆盖")
-    fail(~(t["dcf_mos"] >= cfg.min_mos), "DCF无安全边际/无正FCF")
+    if cfg.min_mos is not None:
+        fail(~(t["dcf_mos"] >= cfg.min_mos), "DCF无安全边际/无正FCF")
+    if cfg.max_fwd_pe is not None:
+        fail(t["fwd_pe"] > cfg.max_fwd_pe, f"前瞻PE>{cfg.max_fwd_pe:g}")
+    if cfg.min_eps_growth is not None:
+        fail(~((t["eps_g0"] >= cfg.min_eps_growth) & (t["eps_g1"] >= cfg.min_eps_growth)), "预期EPS增速不足")
+    if cfg.min_mom is not None:
+        fail(~(t["mom_12_1"] >= cfg.min_mom), "动量不足")
+    if cfg.max_mom is not None:
+        fail(t["mom_12_1"] > cfg.max_mom, "涨幅过大(抛物线)")
     fail(~(t["fwd_pe_trend"] <= cfg.max_pe_trend), "前瞻PE在抬升(陷阱)")
     fail(~(t["rev_90d"] >= cfg.min_revision), "盈利预期被下调")
     fail(t["fcf_pos_years"] < cfg.min_fcf_positive, "FCF不稳定")
+    fail(t["net_debt_ebit"].isna(), "EBIT<=0,杠杆无法衡量")   # NaN 比较恒为 False, 不单独拦会被放行
     fail(t["net_debt_ebit"] > cfg.max_net_debt_ebit, "杠杆过高")
-    fail(~t["above_200d"], "跌破200日线(落刀)")
+    if cfg.min_roic is not None:
+        fail(~(t["roic"] >= cfg.min_roic), f"ROIC<{cfg.min_roic:.0%}")
+    if cfg.require_above_200d:
+        fail(~t["above_200d"], "跌破200日线(落刀)")
     out = t.copy()
     out["fail_reasons"] = reasons.map(lambda r: "; ".join(r))
     out["pass_gates"] = reasons.map(len) == 0
@@ -130,9 +167,10 @@ def composite_score(t: pd.DataFrame, cfg: Config) -> pd.Series:
         "dcf": (r("dcf_mos") + r("fcf_yield")) / 2,
         "revision": (r("rev_90d") + r("rev_breadth")) / 2,
         "quality": (r("roic") + r("net_debt_ebit", False) + r("fcf_conv")) / 3,
-        "momentum": r("mom_12_1"),
+        "momentum": (r("mom_12_1") + r("mom_6_1")) / 2,
+        "growth": (r("eps_g1") + r("eps_accel") + r("surprise") + r("rev_yoy_q") + r("peg", False)) / 5,
     }
-    score = sum(cfg.weights[k] * v for k, v in groups.items())
+    score = sum(cfg.weights.get(k, 0.0) * v for k, v in groups.items())
     for k, v in groups.items():
         t[f"g_{k}"] = v
     return score / sum(cfg.weights.values())
