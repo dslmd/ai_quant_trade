@@ -31,9 +31,10 @@ def main():
     ap.add_argument("--json")
     ap.add_argument("--tickers", nargs="*")
     ap.add_argument("--tickers-file", help="每行一个代码, # 开头为注释")
-    ap.add_argument("--profile", choices=["value", "smallcap"], default="value",
+    ap.add_argument("--profile", choices=["value", "smallcap", "smallcap-relaxed"], default="value",
                     help="value: 价值+DCF+修正; smallcap: 小盘动量+盈利加速+前瞻PE不离谱")
     ap.add_argument("--universe", choices=["smallcap"], help="先用 Yahoo 选股器预筛候选池 (需联网)")
+    ap.add_argument("--broad", action="store_true", help="放宽预筛条件, 候选更多")
     ap.add_argument("--max-names", type=int, default=60, help="预筛后最多取数多少只")
     ap.add_argument("--refresh", action="store_true", help="忽略缓存")
     ap.add_argument("--bench", help="基准指数 CSV (date,close)")
@@ -50,7 +51,7 @@ def main():
     elif a.tickers or a.tickers_file or a.universe:
         tickers = list(a.tickers or [])
         if a.universe:
-            u = smallcap_momentum_universe()
+            u = smallcap_momentum_universe(**(dict(mcap=(300e6, 8e9), mom_52w=(15, 300), min_eps_growth=5, min_rev_growth=5) if a.broad else {}))
             print(f"预筛得到 {len(u)} 只候选")
             tickers += u["symbol"].head(a.max_names).tolist()
         if a.tickers_file:
@@ -78,9 +79,9 @@ def main():
             print(evaluate_snapshot(snap, now, bench))
         return
 
-    cfg = smallcap_momentum_config() if a.profile == "smallcap" else Config()
+    cfg = Config() if a.profile == "value" else smallcap_momentum_config(relaxed=a.profile.endswith("relaxed"))
     t = screen(basket, cfg, top_n=a.top)
-    print(t[COLS_SMALL if a.profile == "smallcap" else COLS].round(3).to_string())
+    print(t[COLS if a.profile == "value" else COLS_SMALL].round(3).to_string())
     print("\n未通过原因:")
     for tk, r in t[~t["pass_gates"]].iterrows():
         print(f"  {tk}: {r['fail_reasons']}")

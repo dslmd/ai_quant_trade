@@ -32,6 +32,8 @@ class Config:
     min_revision: float = 0.0         # 90 天 EPS 预期修正下限
     min_fcf_positive: int = 3         # 近 4 年 FCF 为正的年数
     max_net_debt_ebit: float = 4.0    # 净债务/EBIT 上限
+    pe_trend_only_above: Optional[float] = None   # 前瞻PE高于此值才检查"PE抬升"; 低估值股的PE抬升多半是股价在涨
+    min_eps_growth_now: Optional[float] = None    # 当年增速下限; None 则与 min_eps_growth 相同
     min_roic: Optional[float] = None         # ROIC 下限 (税后 EBIT / 投入资本)
     min_recent_vol: Optional[float] = 0.12   # 近 30 日年化波动率下限; 低于此多半是待收购、价格被锁在要约价附近
     require_above_200d: bool = True
@@ -48,13 +50,16 @@ class Config:
                             "growth": 0.0}
 
 
-def smallcap_momentum_config() -> "Config":
+def smallcap_momentum_config(relaxed: bool = False) -> "Config":
     """小盘动量 + 盈利加速 + 前瞻PE不离谱。DCF 不设门槛 (小盘成长股的 FCF 常被再投资压低)。"""
-    return Config(
+    cfg = Config(
         min_mos=None, min_fcf_positive=2, max_net_debt_ebit=3.0, max_pe_trend=0.15,
         max_fwd_pe=35.0, min_eps_growth=0.10, min_mom=0.15, max_mom=2.5, min_roic=0.08,
         weights={"momentum": 0.30, "growth": 0.25, "revision": 0.25, "value": 0.10, "quality": 0.10, "dcf": 0.0},
     )
+    if relaxed:
+        cfg.min_roic, cfg.min_eps_growth_now, cfg.pe_trend_only_above = 0.05, 0.05, 20.0
+    return cfg
 
 
 def _price_at(prices: pd.Series, days_back: int) -> float:
@@ -140,12 +145,16 @@ def apply_gates(t: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     if cfg.max_fwd_pe is not None:
         fail(t["fwd_pe"] > cfg.max_fwd_pe, f"前瞻PE>{cfg.max_fwd_pe:g}")
     if cfg.min_eps_growth is not None:
-        fail(~((t["eps_g0"] >= cfg.min_eps_growth) & (t["eps_g1"] >= cfg.min_eps_growth)), "预期EPS增速不足")
+        g0_min = cfg.min_eps_growth if cfg.min_eps_growth_now is None else cfg.min_eps_growth_now
+        fail(~((t["eps_g0"] >= g0_min) & (t["eps_g1"] >= cfg.min_eps_growth)), "预期EPS增速不足")
     if cfg.min_mom is not None:
         fail(~(t["mom_12_1"] >= cfg.min_mom), "动量不足")
     if cfg.max_mom is not None:
         fail(t["mom_12_1"] > cfg.max_mom, "涨幅过大(抛物线)")
-    fail(~(t["fwd_pe_trend"] <= cfg.max_pe_trend), "前瞻PE在抬升(陷阱)")
+    pe_mask = ~(t["fwd_pe_trend"] <= cfg.max_pe_trend)
+    if cfg.pe_trend_only_above is not None:
+        pe_mask = pe_mask & (t["fwd_pe"] > cfg.pe_trend_only_above)
+    fail(pe_mask, "前瞻PE在抬升(陷阱)")
     fail(~(t["rev_90d"] >= cfg.min_revision), "盈利预期被下调")
     fail(t["fcf_pos_years"] < cfg.min_fcf_positive, "FCF不稳定")
     fail(t["net_debt_ebit"].isna(), "EBIT<=0,杠杆无法衡量")   # NaN 比较恒为 False, 不单独拦会被放行
