@@ -1,0 +1,211 @@
+{
+ "_note": "博主喊单记录。posted 为美东时间(已用 IREN 11/3、PGY 11/10 的开盘跳空核对)。type: setup=给了价位的挂单, market=没给价位,按发消息后第一根小时线开盘价买入的模拟, avoid=建议回避。entry 为 [下沿, 上沿]; target_pts 为相对成交价的点数。",
+ "calls": [
+  {
+   "id": "NVDA-1104",
+   "ticker": "NVDA",
+   "posted": "2025-11-04T09:34:58",
+   "type": "setup",
+   "entry": [
+    195,
+    200
+   ],
+   "target": 210,
+   "quote": "短线195,200附近可做...看到210,短线获利就走"
+  },
+  {
+   "id": "IREN-1110",
+   "ticker": "IREN",
+   "posted": "2025-11-10T09:26:25",
+   "type": "setup",
+   "entry": [
+    62.4,
+    63.6
+   ],
+   "target": 80,
+   "quote": "回落63附近可以做,目标80"
+  },
+  {
+   "id": "RCAT-1110",
+   "ticker": "RCAT",
+   "posted": "2025-11-10T09:26:25",
+   "type": "market",
+   "target": 12.5,
+   "stop": 7.74,
+   "quote": "低位补一部分,目标上看12.5,止损7.74(5%仓位)"
+  },
+  {
+   "id": "META-1110",
+   "ticker": "META",
+   "posted": "2025-11-10T09:26:25",
+   "type": "setup",
+   "entry": [
+    594,
+    606
+   ],
+   "quote": "600是支撑,小时线回落600可做"
+  },
+  {
+   "id": "TSLA-1112",
+   "ticker": "TSLA",
+   "posted": "2025-11-12T10:24:31",
+   "type": "setup",
+   "entry": [
+    420,
+    430
+   ],
+   "target": 450,
+   "quote": "见到420-430就做,目标450到460,成功率98%"
+  },
+  {
+   "id": "TSLA-1117",
+   "ticker": "TSLA",
+   "posted": "2025-11-17T10:07:17",
+   "type": "setup",
+   "entry": [
+    410,
+    420
+   ],
+   "target_pts": 25,
+   "quote": "410 420附近可做多,短线吃25点利润"
+  },
+  {
+   "id": "META-1117",
+   "ticker": "META",
+   "posted": "2025-11-17T10:07:17",
+   "type": "setup",
+   "entry": [
+    594,
+    606
+   ],
+   "quote": "META 600可补一些"
+  },
+  {
+   "id": "AMZN-1120",
+   "ticker": "AMZN",
+   "posted": "2025-11-20T09:24:27",
+   "type": "setup",
+   "entry": [
+    222.8,
+    227.3
+   ],
+   "target": 255,
+   "quote": "225附近建仓,目标先看255"
+  },
+  {
+   "id": "TSLA-1121",
+   "ticker": "TSLA",
+   "posted": "2025-11-21T09:30:26",
+   "type": "setup",
+   "entry": [
+    396,
+    404
+   ],
+   "quote": "TSLA 400的价格25%仓位(重仓1个把亏损追回)"
+  },
+  {
+   "id": "BABA-1124",
+   "ticker": "BABA",
+   "posted": "2025-11-24T09:39:52",
+   "type": "setup",
+   "entry": [
+    153.5,
+    156.5
+   ],
+   "target": 190,
+   "quote": "回落155位置可做,目标190 (未写代码,按BABA推断)",
+   "inferred_ticker": true
+  },
+  {
+   "id": "NFLX-1103",
+   "ticker": "NFLX",
+   "posted": "2025-11-03T09:50:19",
+   "type": "market",
+   "quote": "属于激进抄底,长期无碍"
+  },
+  {
+   "id": "META-1104",
+   "ticker": "META",
+   "posted": "2025-11-04T09:34:58",
+   "type": "market",
+   "quote": "坚定持有就是,可能还会要求加仓"
+  },
+  {
+   "id": "NVDA-1110",
+   "ticker": "NVDA",
+   "posted": "2025-11-10T09:26:25",
+   "type": "market",
+   "quote": "坚持逢低买入,觉得位置高就建立观察仓"
+  },
+  {
+   "id": "PGY-1110",
+   "ticker": "PGY",
+   "posted": "2025-11-10T09:26:25",
+   "type": "market",
+   "quote": "不错的股,加入观察池,配置一部分仓位也无妨"
+  },
+  {
+   "id": "NVDA-1120",
+   "ticker": "NVDA",
+   "posted": "2025-11-20T09:24:27",
+   "type": "market",
+   "quote": "财报炸裂,我们继续持有"
+  },
+  {
+   "id": "AMZN-1121",
+   "ticker": "AMZN",
+   "posted": "2025-11-21T09:30:26",
+   "type": "market",
+   "quote": "这几个可以持有"
+  },
+  {
+   "id": "META-1121",
+   "ticker": "META",
+   "posted": "2025-11-21T09:30:26",
+   "type": "market",
+   "quote": "这几个可以持有"
+  },
+  {
+   "id": "HIMS-1121",
+   "ticker": "HIMS",
+   "posted": "2025-11-21T09:30:26",
+   "type": "market",
+   "quote": "现在这个价格可补"
+  },
+  {
+   "id": "BABA-1124m",
+   "ticker": "BABA",
+   "posted": "2025-11-24T09:39:52",
+   "type": "market",
+   "quote": "我之所以看好阿里巴巴"
+  },
+  {
+   "id": "PLTR-1103",
+   "ticker": "PLTR",
+   "posted": "2025-11-03T09:50:19",
+   "type": "avoid",
+   "quote": "财报盘后公布,短期来看我们不碰"
+  },
+  {
+   "id": "LAES-1124",
+   "ticker": "LAES",
+   "posted": "2025-11-24T09:39:52",
+   "type": "market",
+   "quote": "目前看LAES已经止跌"
+  },
+  {
+   "id": "FIG-1121",
+   "ticker": "FIG",
+   "posted": "2025-11-21T09:30:26",
+   "type": "avoid",
+   "quote": "POET FIG 反弹砍掉30%"
+  },
+  {
+   "id": "POET-1121",
+   "ticker": "POET",
+   "posted": "2025-11-21T09:30:26",
+   "type": "avoid",
+   "quote": "POET FIG 反弹砍掉30%"
+  }
+ ]
+}
