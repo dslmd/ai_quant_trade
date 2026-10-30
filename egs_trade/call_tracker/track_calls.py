@@ -77,7 +77,7 @@ def evaluate(call, hr, dy, strict=False):
     fd = fill_ts.normalize()
     di = d.index.searchsorted(fd)
     out = {"id": call["id"], "ticker": t, "status": "成交", "fill_time": fill_ts.strftime("%m-%d %H:%M"), "fill": round(float(fill), 2),
-           "outcome": outcome}
+           "outcome": outcome, "fill_ts": fill_ts, "exit_ts": exit_ts, "exit_px": exit_px}
     if exit_px is not None:
         out["rule_exit"] = round(float(exit_px), 2)
         out["rule_ret"] = exit_px / fill - 1
@@ -124,13 +124,13 @@ def main():
     os.makedirs(os.path.dirname(path), exist_ok=True)
     out["loose"].to_csv(os.path.join(os.path.dirname(path), "result_loose.csv"), index=False)
     out["strict"].to_csv(os.path.join(os.path.dirname(path), "result_strict.csv"), index=False)
-    return out, calls
+    return out, calls, hr, dy
 
 
 if __name__ == "__main__":
     pd.set_option("display.width", 250)
     pd.set_option("display.max_columns", 30)
-    o, calls = main()
+    o, calls, _, _ = main()
     kind = {c["id"]: c["type"] for c in calls}
     for name in ("loose", "strict"):
         df = o[name].copy()

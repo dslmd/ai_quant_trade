@@ -7,6 +7,12 @@ python egs_trade/call_tracker/track_calls.py             # 默认读同目录的
 python egs_trade/call_tracker/track_calls.py my_calls.json
 ```
 
+画收益曲线(每条成交后投入同样金额,对比同样买 SPY):
+
+```bash
+python egs_trade/call_tracker/plot_equity.py --notional 10000   # 输出 equity_curve.png
+```
+
 结果写到同目录的 `result_loose.csv`(宽松成交)和 `result_strict.csv`(严格成交)。
 
 ## calls.json 字段
